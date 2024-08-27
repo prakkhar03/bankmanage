@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            flex-direction: column;
+        }
+        h1 {
+            font-size: 36px;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        .box {
+            background-color: #ffffff;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .box a {
+            text-decoration: none;
+            color: #333333;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>BANK OF INDIA</h1>
+    <div class="container">
+        <div class="box"><a href="{% url 'deposit' %}">Deposite</a></div>
+        <div class="box"><a href="{% url 'withdrawal' %}">Withdrawal</a></div>
+        <div class="box"><a href="{% url 'transfer' %}">Transfer</a></div>
+        <div class="box"><a href="{% url 'history' %}">History</a></div>
+        <div class="box"><a href="{% url 'balance' %}">Balance</a></div>
+        <div class="box"><a href="{% url 'exit' %}">Exit</a></div>
+    </div>
+</body>
+</html>
