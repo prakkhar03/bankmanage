@@ -131,13 +131,10 @@ def balance(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     return render(request, 'balance.html', {'balance': user_profile.balance})
 @login_required
-@csrf_protect
 def transfer(request):
     if request.method == 'POST':
         sender_profile = get_object_or_404(UserProfile, user=request.user)
         
-        # Add debug print to see what's being received
-        print("POST data:", request.POST)
         
         receiver_accno = request.POST.get('receiver_account')
         if receiver_accno is None:
