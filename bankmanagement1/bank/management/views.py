@@ -7,6 +7,8 @@ import random
 from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_protect
+from django.db import transaction
+
 def user_login(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -65,12 +67,12 @@ def deposit(request):
 
         try:
             user_profile = UserProfile.objects.get(account_number=accno)
-            deposit_amount = float(amount)
+            deposit_amount = Decimal(amount)
 
             if deposit_amount <= 0:
                 raise ValueError("Deposit amount must be positive.")
 
-            user_profile.balance += Decimal(deposit_amount)
+            user_profile.balance += deposit_amount
             user_profile.save()
 
             Transaction.objects.create(
@@ -98,14 +100,14 @@ def withdrawal(request):
 
         try:
             user_profile = UserProfile.objects.get(account_number=accno)
-            withdraw_amount = float(amt)
+            withdraw_amount = Decimal(amt)
 
             if withdraw_amount <= 0:
                 raise ValueError("Withdrawal amount must be positive.")
             if user_profile.balance < withdraw_amount:
                 raise ValueError("Insufficient balance.")
 
-            user_profile.balance -= Decimal(withdraw_amount)
+            user_profile.balance -= withdraw_amount
             user_profile.save()
 
             Transaction.objects.create(
@@ -129,48 +131,68 @@ def balance(request):
     user_profile = get_object_or_404(UserProfile, user=request.user)
     return render(request, 'balance.html', {'balance': user_profile.balance})
 @login_required
+@csrf_protect
 def transfer(request):
     if request.method == 'POST':
-        sender_accno = request.POST.get("senderAccountNumber")
-        receiver_accno = request.POST.get("receiverAccountNumber")
-        amount = request.POST.get("amount")
+        sender_profile = get_object_or_404(UserProfile, user=request.user)
+        
+        # Add debug print to see what's being received
+        print("POST data:", request.POST)
+        
+        receiver_accno = request.POST.get('receiver_account')
+        if receiver_accno is None:
+            messages.error(request, "Please provide a recipient account number")
+            return render(request, 'transfer.html')
+            
+        receiver_accno = receiver_accno.strip()
+        amount = request.POST.get('amount')
 
         try:
-            sender_profile = UserProfile.objects.get(account_number=sender_accno)
+            # Get receiver's profile
             receiver_profile = UserProfile.objects.get(account_number=receiver_accno)
-            transfer_amount = float(amount)
+            transfer_amount = Decimal(amount)
 
+            # Validate transfer
             if transfer_amount <= 0:
-                raise ValueError("Transfer amount must be positive.")
+                raise ValueError("Transfer amount must be positive")
             if sender_profile.balance < transfer_amount:
-                raise ValueError("Insufficient balance.")
+                raise ValueError("Insufficient balance")
+            if sender_profile.account_number == receiver_accno:
+                raise ValueError("Cannot transfer to your own account")
 
-            sender_profile.balance -= transfer_amount
-            receiver_profile.balance += transfer_amount
-            sender_profile.save()
-            receiver_profile.save()
-            
-            Transaction.objects.create(
-                user_profile=sender_profile,
-                transaction_type='transfer',
-                amount=transfer_amount,
-                description=f'Transfer to {receiver_accno}'
-            )
-            Transaction.objects.create(
-                user_profile=receiver_profile,
-                transaction_type='transfer',
-                amount=transfer_amount,
-                description=f'Transfer from {sender_accno}'
-            )
+            # Perform transfer in atomic transaction
+            with transaction.atomic():
+                # Update balances
+                sender_profile.balance -= transfer_amount
+                receiver_profile.balance += transfer_amount
+                sender_profile.save()
+                receiver_profile.save()
 
-            messages.success(request, "Transfer successful!")
+                # Create transaction records
+                Transaction.objects.create(
+                    user_profile=sender_profile,
+                    transaction_type='transfer_out',
+                    amount=transfer_amount,
+                    description=f'Transfer to account {receiver_accno}'
+                )
+                
+                Transaction.objects.create(
+                    user_profile=receiver_profile,
+                    transaction_type='transfer_in',
+                    amount=transfer_amount,
+                    description=f'Transfer from account {sender_profile.account_number}'
+                )
+
+            messages.success(request, f'Successfully transferred {amount} to account {receiver_accno}')
             return redirect('balance')
 
         except UserProfile.DoesNotExist:
-            messages.error(request, "Account not found.")
+            messages.error(request, "Recipient account not found")
         except ValueError as e:
             messages.error(request, str(e))
-
+        except Exception as e:
+            messages.error(request, f"Transfer failed: {str(e)}")
+            
     return render(request, 'transfer.html')
 
 @login_required
@@ -183,4 +205,6 @@ def mainpage(request):
     return render(request, 'mainpage.html')
 
 def exit(request):
-    return render(request, 'login.html')
+    from django.contrib.auth import logout
+    logout(request)
+    return redirect('login')
